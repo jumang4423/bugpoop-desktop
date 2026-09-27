@@ -86,7 +86,8 @@ function openSettings(): void {
   }
   settingsWindow = new BrowserWindow({
     width: 460,
-    height: 320,
+    height: 372,
+    useContentSize: true,
     resizable: false,
     minimizable: false,
     maximizable: false,
