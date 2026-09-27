@@ -10,6 +10,7 @@ interface PetCursorMessage {
 interface PetSettings {
   bugCount: number;
   hungerSpeed: number;
+  reelMode: boolean;
 }
 
 interface PetBridgeApi {

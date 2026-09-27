@@ -44,6 +44,9 @@ open **Settings…**, **Mute** the chewing sounds, or **Quit**.
 - **空腹スピード / hunger speed** — `0` freezes appetite (the bug just
   wanders), `35` is the original pace, and `100` makes every meal immediate:
   as soon as a bite ends it is hungry again, so it eats → poops → eats again.
+- **Reel mode** — resizes the overlay into a narrow, full-height strip on the
+  **left third of the screen**, for capturing phone-shaped video. It changes
+  nothing else.
 
 Settings are saved to the app's user-data folder and applied live.
 

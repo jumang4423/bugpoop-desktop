@@ -1,5 +1,6 @@
 const bugs = requiredInput("#bugs");
 const hunger = requiredInput("#hunger");
+const reel = requiredInput("#reel");
 const bugsOut = requiredOutput("#bugs-out");
 const hungerOut = requiredOutput("#hunger-out");
 
@@ -12,12 +13,14 @@ function push(): void {
   window.petBridge?.setSettings({
     bugCount: Number(bugs.value),
     hungerSpeed: Number(hunger.value),
+    reelMode: reel.checked,
   });
 }
 
 function apply(settings: PetSettings): void {
   bugs.value = String(settings.bugCount);
   hunger.value = String(settings.hungerSpeed);
+  reel.checked = settings.reelMode;
   render();
 }
 
@@ -29,6 +32,7 @@ hunger.addEventListener("input", () => {
   render();
   push();
 });
+reel.addEventListener("change", push);
 
 render();
 window.petBridge?.getSettings().then(apply).catch(() => {});

@@ -9,6 +9,7 @@ interface CursorMessage {
 interface Settings {
   bugCount: number;
   hungerSpeed: number;
+  reelMode: boolean;
 }
 
 contextBridge.exposeInMainWorld("petBridge", {

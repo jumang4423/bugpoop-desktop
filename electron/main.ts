@@ -31,9 +31,15 @@ interface Settings {
   bugCount: number;
   /** Metabolism multiplier 0..100. 0 = never hungry, 100 = instant meals. */
   hungerSpeed: number;
+  /** Video mode: a narrow, full-height strip on the left third of the screen. */
+  reelMode: boolean;
 }
 
-const DEFAULT_SETTINGS: Settings = { bugCount: 1, hungerSpeed: 35 };
+const DEFAULT_SETTINGS: Settings = {
+  bugCount: 1,
+  hungerSpeed: 35,
+  reelMode: false,
+};
 
 function settingsFile(): string {
   return path.join(app.getPath("userData"), "settings.json");
@@ -49,6 +55,10 @@ function clampSettings(input: Partial<Settings>): Settings {
     hungerSpeed: Number.isFinite(hungerSpeed)
       ? Math.max(0, Math.min(100, hungerSpeed))
       : DEFAULT_SETTINGS.hungerSpeed,
+    reelMode:
+      typeof input.reelMode === "boolean"
+        ? input.reelMode
+        : DEFAULT_SETTINGS.reelMode,
   };
 }
 
@@ -86,7 +96,7 @@ function openSettings(): void {
   }
   settingsWindow = new BrowserWindow({
     width: 460,
-    height: 372,
+    height: 384,
     useContentSize: true,
     resizable: false,
     minimizable: false,
@@ -123,11 +133,27 @@ function displayUnion(): Electron.Rectangle {
   return { x: left, y: top, width: right - left, height: bottom - top };
 }
 
+/**
+ * Reel mode is a narrow vertical strip on the left third of the primary
+ * display, at full height, for capturing phone-shaped video.
+ */
+function overlayBounds(): Electron.Rectangle {
+  if (DEV) return { x: 140, y: 140, width: 960, height: 640 };
+  if (settings.reelMode) {
+    const display = screen.getPrimaryDisplay();
+    return {
+      x: display.bounds.x,
+      y: display.bounds.y,
+      width: Math.max(240, Math.round(display.bounds.width / 3)),
+      height: display.bounds.height,
+    };
+  }
+  return displayUnion();
+}
+
 function createOverlay(): void {
   if (overlay && !overlay.isDestroyed()) return;
-  const bounds = DEV
-    ? { x: 140, y: 140, width: 960, height: 640 }
-    : displayUnion();
+  const bounds = overlayBounds();
 
   overlay = new BrowserWindow({
     ...bounds,
@@ -174,7 +200,7 @@ function createOverlay(): void {
 
 function applyDisplayBounds(): void {
   if (DEV || !overlay || overlay.isDestroyed()) return;
-  overlay.setBounds(displayUnion());
+  overlay.setBounds(overlayBounds());
 }
 
 function startCursorStream(): void {
@@ -228,8 +254,10 @@ app.whenReady().then(() => {
 
   ipcMain.handle("settings:get", () => settings);
   ipcMain.on("settings:set", (_event, partial: Partial<Settings>) => {
+    const previousReelMode = settings.reelMode;
     settings = clampSettings({ ...settings, ...partial });
     saveSettings();
+    if (settings.reelMode !== previousReelMode) applyDisplayBounds();
     broadcastSettings();
   });
 
