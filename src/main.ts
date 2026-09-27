@@ -38,7 +38,6 @@ window.petBridge?.onCursor((message) => {
   world.pointerMove({ x: message.x, y: message.y }, performance.now());
 });
 window.petBridge?.onMute((muted) => sound.setMuted(muted));
-window.petBridge?.onReset(() => world.reset());
 
 // Fallback for `npm run dev` in a normal, interactive window.
 window.addEventListener("pointermove", (event) => {

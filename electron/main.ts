@@ -27,7 +27,7 @@ let settingsWindow: BrowserWindow | null = null;
 let muted = false;
 
 interface Settings {
-  /** How many bugs wander the desktop (1..25). */
+  /** How many bugs wander the desktop (1..50). */
   bugCount: number;
   /** Metabolism multiplier 0..100. 0 = never hungry, 100 = instant meals. */
   hungerSpeed: number;
@@ -44,7 +44,7 @@ function clampSettings(input: Partial<Settings>): Settings {
   const hungerSpeed = Math.round(Number(input.hungerSpeed));
   return {
     bugCount: Number.isFinite(bugCount)
-      ? Math.max(1, Math.min(25, bugCount))
+      ? Math.max(1, Math.min(50, bugCount))
       : DEFAULT_SETTINGS.bugCount,
     hungerSpeed: Number.isFinite(hungerSpeed)
       ? Math.max(0, Math.min(100, hungerSpeed))
@@ -213,10 +213,6 @@ function createTray(): void {
         {
           label: "Settings…",
           click: () => openSettings(),
-        },
-        {
-          label: "Reset pet",
-          click: () => overlay?.webContents.send("reset"),
         },
         { type: "separator" },
         { role: "quit" },

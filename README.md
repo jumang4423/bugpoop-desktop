@@ -36,11 +36,11 @@ npm run dev
 ```
 
 The app has no dock icon; it lives in the menu bar. Use the tray menu to
-open **Settings…**, **Mute** the chewing sounds, **Reset pet**, or **Quit**.
+open **Settings…**, **Mute** the chewing sounds, or **Quit**.
 
 ### Settings
 
-- **虫のかず / bugs** — how many creatures wander the desktop (1–25).
+- **虫のかず / bugs** — how many creatures wander the desktop (1–50).
 - **空腹スピード / hunger speed** — `0` freezes appetite (the bug just
   wanders), `35` is the original pace, and `100` makes every meal immediate:
   as soon as a bite ends it is hungry again, so it eats → poops → eats again.

@@ -69,7 +69,7 @@ interface CreatureAgent {
 
 const LOCOMOTION_TIME_SCALE = 5;
 const DEFAULT_CREATURE_COUNT = 1;
-const MAX_CREATURE_COUNT = 25;
+const MAX_CREATURE_COUNT = 50;
 const POINTER_CLICK_RADIUS = 22;
 const ANGER_BUBBLE_HOLD_MS = 2_000;
 const POST_POOP_MUSIC_DELAY_MS = 1_000;
@@ -160,7 +160,7 @@ export class BugWorld {
     };
   }
 
-  /** Change how many bugs wander the desktop (1..25). */
+  /** Change how many bugs wander the desktop (1..50). */
   setPopulation(count: number) {
     const next = Math.max(
       1,

@@ -15,7 +15,6 @@ interface PetSettings {
 interface PetBridgeApi {
   onCursor(callback: (message: PetCursorMessage) => void): void;
   onMute(callback: (muted: boolean) => void): void;
-  onReset(callback: () => void): void;
   onSettings(callback: (settings: PetSettings) => void): void;
   getSettings(): Promise<PetSettings>;
   setSettings(partial: Partial<PetSettings>): void;

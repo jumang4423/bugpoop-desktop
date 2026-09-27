@@ -23,9 +23,6 @@ contextBridge.exposeInMainWorld("petBridge", {
       callback(muted)
     );
   },
-  onReset(callback: () => void): void {
-    ipcRenderer.on("reset", () => callback());
-  },
   onSettings(callback: (settings: Settings) => void): void {
     ipcRenderer.on("settings", (_event: IpcRendererEvent, settings: Settings) =>
       callback(settings)
