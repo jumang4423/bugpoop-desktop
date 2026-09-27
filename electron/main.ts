@@ -102,7 +102,7 @@ function startCursorStream(): void {
 
 function createTray(): void {
   const icon = nativeImage
-    .createFromPath(path.join(projectRoot, "assets", "bug-face.png"))
+    .createFromPath(path.join(projectRoot, "assets", "bug-dropping.png"))
     .resize({ width: 18, height: 18 });
   tray = new Tray(icon);
   tray.setToolTip("Bugpoop");
