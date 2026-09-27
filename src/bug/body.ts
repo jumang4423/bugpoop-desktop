@@ -158,6 +158,18 @@ export class CaterpillarBody {
   private activeStepGroup: 0 | 1 = 0;
   private stepGroupAge = 0;
   private activeGroupHasLanded = false;
+  private lastCadenceGain = 1;
+  /** Live locomotion telemetry, handy for tuning the gait. */
+  readonly debug = {
+    support: 1,
+    reach: 1,
+    supportingHands: 0,
+    commandedSpeed: 0,
+    cruiseSpeed: 0,
+    cadenceGain: 1,
+    maxReach: 0,
+    worstNode: -1,
+  };
   private readonly tractionVelocity: Vec2[];
   private readonly gaitRandom: Random;
   private readonly legTempoScale: number;
@@ -445,10 +457,17 @@ export class CaterpillarBody {
     }
 
     this.solveBodyShape(bounds, 7);
-    // Limb articulation runs at half-time. Contact force remains independent
-    // and is amplified below, so slow deliberate hands can drive a fast torso.
+    // Limb articulation runs at half-time, and the whole leg cycle speeds up
+    // with the requested speed so a fast body never outruns its own steps.
+    // Over-running the steps is what over-extends the rear legs and trips the
+    // reach brake, which produced the speed-dependent surge.
+    const cadenceGain = 1 + clamp((control.speed - 40) / 70, 0, 3);
+    this.lastCadenceGain = cadenceGain;
     this.updateLegs(
-      deltaSeconds * LEG_MOTION_TIME_SCALE * this.legTempoScale,
+      deltaSeconds *
+        LEG_MOTION_TIME_SCALE *
+        this.legTempoScale *
+        cadenceGain,
       deltaSeconds,
       control,
       bounds
@@ -610,6 +629,7 @@ export class CaterpillarBody {
     const headForward = this.desiredForward();
     const locomotionActivity =
       activity * clamp(control.speed / 20);
+    // Leg cadence has to scale with speed (see update()).
     if (locomotionActivity <= 0.04) {
       // Freeze the exact current leg phase. Queued lifts, airborne joints and
       // elevation resume from this pose when movement is requested again.
@@ -870,13 +890,19 @@ export class CaterpillarBody {
     const supportingHands = this.legs.filter(
       (leg) => leg.mode === "stance" && leg.contact
     ).length;
-    const hasSupport = supportingHands >= Math.max(1, this.legs.length / 2);
-    // Slow only in the emergency band near maximum reach. This continuous
-    // limiter replaces the old positional snap-back, so contact cannot produce
-    // a fast-forward/rewind cadence even during a tight turn.
-    const commandedSpeed = hasSupport
-      ? cruiseSpeed * this.stanceReachDriveScale()
-      : 0;
+    // A momentary dip below half support must not zero the drive, or the body
+    // visibly stutters each time a leg swings or searches. Taper the drive
+    // continuously instead: full traction at half support, easing out below.
+    const supportRatio = supportingHands / Math.max(1, this.legs.length);
+    const support = smoothstep(clamp((supportRatio - 0.15) / 0.2));
+    const reachScale = this.stanceReachDriveScale();
+    const commandedSpeed = cruiseSpeed * support * reachScale;
+    this.debug.support = support;
+    this.debug.reach = reachScale;
+    this.debug.supportingHands = supportingHands;
+    this.debug.commandedSpeed = commandedSpeed;
+    this.debug.cruiseSpeed = cruiseSpeed;
+    this.debug.cadenceGain = this.lastCadenceGain;
 
     for (let index = 0; index < this.nodes.length; index += 1) {
       const routeDirection = this.routeDirectionAt(index, headForward);
@@ -928,18 +954,22 @@ export class CaterpillarBody {
   private stanceReachDriveScale() {
     const reach = Math.max(0.001, this.totalLegReach());
     let largestReachRatio = 0;
+    let worstNode = -1;
     for (const leg of this.legs) {
       if (leg.mode !== "stance" || !leg.contact) continue;
       const frame = this.legFrame(leg);
-      largestReachRatio = Math.max(
-        largestReachRatio,
-        magnitude(subtract(leg.anchor, frame.root)) / reach
-      );
+      const ratio = magnitude(subtract(leg.anchor, frame.root)) / reach;
+      if (ratio > largestReachRatio) {
+        largestReachRatio = ratio;
+        worstNode = leg.nodeIndex;
+      }
     }
-    if (largestReachRatio <= 0.78) return 1;
-    // Full drive below 78% reach, continuously tapering to zero at 90%.
-    // Normally the next group lands before this limiter becomes visible.
-    return 1 - smoothstep(clamp((largestReachRatio - 0.78) / 0.12));
+    this.debug.maxReach = largestReachRatio;
+    this.debug.worstNode = worstNode;
+    if (largestReachRatio <= 0.86) return 1;
+    // Full drive below 86% reach, tapering to zero at 100%. The wider band
+    // gives the faster gait room to breathe before the emergency brake appears.
+    return 1 - smoothstep(clamp((largestReachRatio - 0.86) / 0.14));
   }
 
   private integrateJoint(
@@ -1288,11 +1318,15 @@ export class CaterpillarBody {
       y: desiredForward.x * jitterSine + desiredForward.y * jitterCosine,
     };
     const lateral =
-      totalReach * (0.34 + this.gaitRandom.between(-0.025, 0.025));
+      totalReach * (0.28 + this.gaitRandom.between(-0.02, 0.02));
+    // Plant well inside the reach brake so the stance has room to pull. A
+    // large plant plus the seeded stride phenotype used to start every step
+    // already over the limit, which throttled the whole body.
+    const stride = clamp(this.strideScale, 0.86, 1.06);
     const lead =
       totalReach *
-      (0.74 + speedLead * 0.04 + this.gaitRandom.between(-0.035, 0.035)) *
-      this.strideScale;
+      (0.55 + speedLead * 0.12 + this.gaitRandom.between(-0.03, 0.03)) *
+      stride;
     const target = add(
       add(frame.root, scale(frame.outward, lateral)),
       scale(reachDirection, lead)
@@ -1704,6 +1738,11 @@ export class CaterpillarBody {
 
     const forward = this.desiredForward();
     const curveAmount = clamp(this.curvatureScale * 0.58, 0.46, 0.72);
+    // The rear discs follow the head's recorded path. At speed the head lays
+    // down path much faster than the tail can chase it, which stretches the
+    // torso and over-extends the rear legs (the reach brake then fires). Make
+    // the follow stiffer with speed so the body keeps its shape.
+    const speedGain = 1 + clamp(this.lastControl.speed / 90, 0, 2.4);
     let distanceFromHead = 0;
     for (let index = 1; index < this.nodes.length; index += 1) {
       distanceFromHead += this.segmentRestLength(index - 1);
@@ -1719,7 +1758,10 @@ export class CaterpillarBody {
       const node = this.nodes[index];
       const correction = scale(
         subtract(target, node.position),
-        exponentialApproach(lerp(10, 4.2, progress), deltaSeconds)
+        exponentialApproach(
+          lerp(10, 4.2, progress) * speedGain,
+          deltaSeconds
+        )
       );
       node.position = add(node.position, correction);
       node.previous = add(node.previous, correction);

@@ -59,7 +59,7 @@ npm run build
 
 The creature is the **original bug code** from
 [text.management](https://github.com/mindofmatthew/text.management), written by
-jumang4423, copied verbatim into `src/bug/`:
+jumang4423, ported into `src/bug/`:
 
 ```
 src/bug/body.ts        the soft body and its reflex legs
@@ -74,6 +74,19 @@ Only the editor is replaced. `src/adapters/desktopHabitat.ts` implements the
 same `HabitatAdapter` interface the CodeMirror habitat did, but on a screen
 instead of a document: it hands the bug a few invisible bite sites on the
 desktop, and `eat()` simply removes one of them — it edits nothing.
+
+### Locomotion smoothing
+
+The original gait capped out around 380 px/s. As the requested speed rose the
+rear legs over-extended, the reach brake throttled the whole body, and the
+motion pulsed (per-step speed CV up to ~1.0). The fix scales the **whole leg
+cycle** (swing + stance) with the requested speed and plants each foot with
+headroom, so the body never outruns its own steps. Speed is now linear with the
+request and the per-step speed CV is ~0.01.
+
+`tests/locomotion.test.ts` measures this headlessly — mean speed, per-step
+speed ripple (CV) and sideways wobble — across 60–260 px/s, so the gait can be
+tuned without watching it by eye.
 
 ```
 electron/main.ts       transparent, click-through, all-Spaces window + tray

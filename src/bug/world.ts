@@ -368,7 +368,7 @@ export class BugWorld {
       this.accumulator -= fixedStep;
       steps += 1;
     }
-    if (steps === 4) this.accumulator = 0;
+    if (steps === 4) this.accumulator = Math.min(this.accumulator, fixedStep);
     const interpolation = clamp(this.accumulator / fixedStep);
 
     this.renderer.render({
