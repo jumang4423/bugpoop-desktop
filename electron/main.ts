@@ -1,4 +1,13 @@
-import { app, BrowserWindow, Menu, Tray, nativeImage, screen } from "electron";
+import {
+  app,
+  BrowserWindow,
+  Menu,
+  Tray,
+  ipcMain,
+  nativeImage,
+  screen,
+} from "electron";
+import fs from "node:fs";
 import path from "node:path";
 
 const DEV = process.env.BUGBUG_DEV === "1";
@@ -14,7 +23,88 @@ if (app.dock) app.dock.hide();
 let overlay: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let cursorTimer: NodeJS.Timeout | null = null;
+let settingsWindow: BrowserWindow | null = null;
 let muted = false;
+
+interface Settings {
+  /** How many bugs wander the desktop (1..25). */
+  bugCount: number;
+  /** Metabolism multiplier 0..100. 0 = never hungry, 100 = instant meals. */
+  hungerSpeed: number;
+}
+
+const DEFAULT_SETTINGS: Settings = { bugCount: 1, hungerSpeed: 35 };
+
+function settingsFile(): string {
+  return path.join(app.getPath("userData"), "settings.json");
+}
+
+function clampSettings(input: Partial<Settings>): Settings {
+  const bugCount = Math.round(Number(input.bugCount));
+  const hungerSpeed = Math.round(Number(input.hungerSpeed));
+  return {
+    bugCount: Number.isFinite(bugCount)
+      ? Math.max(1, Math.min(25, bugCount))
+      : DEFAULT_SETTINGS.bugCount,
+    hungerSpeed: Number.isFinite(hungerSpeed)
+      ? Math.max(0, Math.min(100, hungerSpeed))
+      : DEFAULT_SETTINGS.hungerSpeed,
+  };
+}
+
+function loadSettings(): Settings {
+  try {
+    const raw = JSON.parse(
+      fs.readFileSync(settingsFile(), "utf8")
+    ) as Partial<Settings>;
+    return clampSettings(raw);
+  } catch {
+    return { ...DEFAULT_SETTINGS };
+  }
+}
+
+let settings: Settings = { ...DEFAULT_SETTINGS };
+
+function saveSettings(): void {
+  try {
+    fs.mkdirSync(path.dirname(settingsFile()), { recursive: true });
+    fs.writeFileSync(settingsFile(), JSON.stringify(settings, null, 2));
+  } catch {
+    // Ignore persistence failures; the pet still works for this session.
+  }
+}
+
+function broadcastSettings(): void {
+  overlay?.webContents.send("settings", settings);
+}
+
+function openSettings(): void {
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.show();
+    settingsWindow.focus();
+    return;
+  }
+  settingsWindow = new BrowserWindow({
+    width: 460,
+    height: 320,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    title: "Bugpoop Settings",
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, "preload.cjs"),
+    },
+  });
+  // Sit above the always-on-top pet so the form is never drawn over.
+  settingsWindow.setAlwaysOnTop(true, "screen-saver");
+  settingsWindow.loadFile(path.join(projectRoot, "settings.html"));
+  settingsWindow.once("ready-to-show", () => settingsWindow?.show());
+  settingsWindow.on("closed", () => {
+    settingsWindow = null;
+  });
+}
 
 function displayUnion(): Electron.Rectangle {
   const displays = screen.getAllDisplays();
@@ -70,6 +160,7 @@ function createOverlay(): void {
   }
 
   overlay.loadFile(path.join(projectRoot, "index.html"));
+  overlay.webContents.on("did-finish-load", () => broadcastSettings());
   overlay.once("ready-to-show", () => {
     if (!overlay || overlay.isDestroyed()) return;
     if (DEV) overlay.show();
@@ -120,6 +211,10 @@ function createTray(): void {
           },
         },
         {
+          label: "Settings…",
+          click: () => openSettings(),
+        },
+        {
           label: "Reset pet",
           click: () => overlay?.webContents.send("reset"),
         },
@@ -132,6 +227,15 @@ function createTray(): void {
 }
 
 app.whenReady().then(() => {
+  settings = loadSettings();
+
+  ipcMain.handle("settings:get", () => settings);
+  ipcMain.on("settings:set", (_event, partial: Partial<Settings>) => {
+    settings = clampSettings({ ...settings, ...partial });
+    saveSettings();
+    broadcastSettings();
+  });
+
   createOverlay();
   startCursorStream();
   createTray();

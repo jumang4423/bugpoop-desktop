@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Bugpoop Settings</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue",
+          sans-serif;
+      }
+      body {
+        margin: 0;
+        padding: 20px 22px;
+        background: #f5f5f7;
+        color: #1d1d1f;
+        user-select: none;
+        -webkit-user-select: none;
+      }
+      h1 {
+        margin: 0 0 16px;
+        font-size: 15px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
+      }
+      .row {
+        margin-bottom: 20px;
+      }
+      .row .label {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        margin-bottom: 6px;
+        font-size: 13px;
+      }
+      .row .label .value {
+        font-variant-numeric: tabular-nums;
+        font-weight: 600;
+      }
+      input[type="range"] {
+        width: 100%;
+        margin: 0;
+      }
+      .hint {
+        margin: 4px 0 0;
+        font-size: 11px;
+        line-height: 1.45;
+        color: #6e6e73;
+      }
+      @media (prefers-color-scheme: dark) {
+        body {
+          background: #1e1e20;
+          color: #f5f5f7;
+        }
+        .hint {
+          color: #9a9aa0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Bugpoop</h1>
+
+    <div class="row">
+      <div class="label">
+        <span>虫のかず (bugs)</span>
+        <output class="value" id="bugs-out">1</output>
+      </div>
+      <input id="bugs" type="range" min="1" max="25" step="1" value="1" />
+    </div>
+
+    <div class="row">
+      <div class="label">
+        <span>空腹スピード (hunger speed)</span>
+        <output class="value" id="hunger-out">35</output>
+      </div>
+      <input id="hunger" type="range" min="0" max="100" step="1" value="35" />
+      <p class="hint">
+        100 = すぐお腹が空く（食べる → うんこ → また食べる、を繰り返す）<br />
+        35 = ふつう / 0 = お腹が空かない（うろつくだけ）
+      </p>
+    </div>
+
+    <script src="./dist/settings.js"></script>
+  </body>
+</html>

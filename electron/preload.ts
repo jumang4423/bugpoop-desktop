@@ -6,7 +6,13 @@ interface CursorMessage {
   active: boolean;
 }
 
+interface Settings {
+  bugCount: number;
+  hungerSpeed: number;
+}
+
 contextBridge.exposeInMainWorld("petBridge", {
+  // Overlay window.
   onCursor(callback: (message: CursorMessage) => void): void {
     ipcRenderer.on("cursor", (_event: IpcRendererEvent, message: CursorMessage) =>
       callback(message)
@@ -19,5 +25,17 @@ contextBridge.exposeInMainWorld("petBridge", {
   },
   onReset(callback: () => void): void {
     ipcRenderer.on("reset", () => callback());
+  },
+  onSettings(callback: (settings: Settings) => void): void {
+    ipcRenderer.on("settings", (_event: IpcRendererEvent, settings: Settings) =>
+      callback(settings)
+    );
+  },
+  // Settings window.
+  getSettings(): Promise<Settings> {
+    return ipcRenderer.invoke("settings:get") as Promise<Settings>;
+  },
+  setSettings(partial: Partial<Settings>): void {
+    ipcRenderer.send("settings:set", partial);
   },
 });

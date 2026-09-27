@@ -36,7 +36,16 @@ npm run dev
 ```
 
 The app has no dock icon; it lives in the menu bar. Use the tray menu to
-**Mute** the chewing sounds, **Reset pet**, or **Quit**.
+open **Settings…**, **Mute** the chewing sounds, **Reset pet**, or **Quit**.
+
+### Settings
+
+- **虫のかず / bugs** — how many creatures wander the desktop (1–25).
+- **空腹スピード / hunger speed** — `0` freezes appetite (the bug just
+  wanders), `35` is the original pace, and `100` makes every meal immediate:
+  as soon as a bite ends it is hungry again, so it eats → poops → eats again.
+
+Settings are saved to the app's user-data folder and applied live.
 
 Other scripts:
 
@@ -68,8 +77,10 @@ desktop, and `eat()` simply removes one of them — it edits nothing.
 
 ```
 electron/main.ts       transparent, click-through, all-Spaces window + tray
-electron/preload.ts    cursor / mute / reset bridge
+electron/preload.ts    cursor / mute / reset / settings bridge
 src/main.ts            canvas bootstrap and pointer plumbing
+src/settings.ts        the settings window form
+src/hunger.ts          maps the hunger-speed slider to a metabolism multiplier
 src/adapters/...       the desktop habitat
 src/audio.ts           plays the sc-dotfiles mc_eat / funny sample banks
 src/sounds/            the original wav samples, bundled at build time

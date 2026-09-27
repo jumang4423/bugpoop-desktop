@@ -22,6 +22,14 @@ await build({
   loader: { ".wav": "dataurl" },
 });
 
+await build({
+  ...shared,
+  entryPoints: ["src/settings.ts"],
+  outfile: "dist/settings.js",
+  format: "iife",
+  platform: "browser",
+});
+
 // Electron main + preload: CommonJS, with electron kept external.
 await build({
   ...shared,

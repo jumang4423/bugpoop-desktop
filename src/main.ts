@@ -1,24 +1,7 @@
 import { SoundKit } from "./audio";
 import { DesktopHabitat } from "./adapters/desktopHabitat";
 import { BugWorld } from "./bug/world";
-
-interface CursorMessage {
-  x: number;
-  y: number;
-  active: boolean;
-}
-
-interface PetBridge {
-  onCursor(callback: (message: CursorMessage) => void): void;
-  onMute(callback: (muted: boolean) => void): void;
-  onReset(callback: () => void): void;
-}
-
-declare global {
-  interface Window {
-    petBridge?: PetBridge;
-  }
-}
+import { hungerScaleFor } from "./hunger";
 
 const canvas = requiredCanvas();
 
@@ -32,6 +15,14 @@ sound.prime();
 world.onMunch = () => sound.munch();
 world.onPoopSound = (kind) =>
   kind === "wiggle" ? sound.wiggle() : sound.release();
+
+function applySettings(settings: PetSettings): void {
+  world.setPopulation(settings.bugCount);
+  world.setHungerScale(hungerScaleFor(settings.hungerSpeed));
+}
+
+window.petBridge?.onSettings((settings) => applySettings(settings));
+window.petBridge?.getSettings().then(applySettings).catch(() => {});
 
 window.addEventListener("resize", () => {
   habitat.resize(window.innerWidth, window.innerHeight);

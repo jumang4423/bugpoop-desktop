@@ -58,6 +58,8 @@ export class CaterpillarBrain {
   hunger: number;
   behaviour: Behaviour = "hatching";
   targetFoodId: string | null = null;
+  /** Global metabolism multiplier. Infinity means "always starving". */
+  hungerScale = 1;
 
   private readonly random: Random;
   private readonly initialHunger: number;
@@ -92,9 +94,15 @@ export class CaterpillarBrain {
   update(senses: BrainSenses): BrainDecision {
     const deltaSeconds = senses.deltaSeconds;
     this.age += deltaSeconds;
-    this.hunger = clamp(
-      this.hunger + deltaSeconds * (this.manualMode ? 0 : this.hungerPerSecond)
-    );
+    if (!this.manualMode) {
+      this.hunger =
+        this.hungerScale === Infinity
+          ? 1
+          : clamp(
+              this.hunger +
+                deltaSeconds * this.hungerPerSecond * this.hungerScale
+            );
+    }
     this.updateCruiseSpeed(deltaSeconds);
 
     const pointerDanger =
@@ -339,6 +347,10 @@ export class CaterpillarBrain {
 
   isManualMode() {
     return this.manualMode;
+  }
+
+  setHungerScale(scale: number) {
+    this.hungerScale = Math.max(0, scale);
   }
 
   setManualMode(enabled: boolean) {

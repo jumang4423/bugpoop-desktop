@@ -68,7 +68,8 @@ interface CreatureAgent {
 }
 
 const LOCOMOTION_TIME_SCALE = 5;
-const CREATURE_COUNT = 1;
+const DEFAULT_CREATURE_COUNT = 1;
+const MAX_CREATURE_COUNT = 25;
 const POINTER_CLICK_RADIUS = 22;
 const ANGER_BUBBLE_HOLD_MS = 2_000;
 const POST_POOP_MUSIC_DELAY_MS = 1_000;
@@ -87,10 +88,10 @@ export interface BugWorldMetrics extends CreatureVitals {
 
 export class BugWorld {
   readonly renderer: BugRenderer;
-  readonly body: CaterpillarBody;
-  readonly bodies: CaterpillarBody[];
-  readonly brain: CaterpillarBrain;
-  readonly brains: CaterpillarBrain[];
+  body: CaterpillarBody;
+  bodies: CaterpillarBody[];
+  brain: CaterpillarBrain;
+  brains: CaterpillarBrain[];
 
   mode: CreatureMode = "nibble";
   autoPulse = false;
@@ -105,7 +106,8 @@ export class BugWorld {
   // Last place eaten. The same place is not eaten consecutively.
   private lastBiteFrom: number | null = null;
   private rhythmPulses: RhythmPulse[] = [];
-  private readonly agents: CreatureAgent[];
+  private agents: CreatureAgent[];
+  private population = DEFAULT_CREATURE_COUNT;
   private snapshot: HabitatSnapshot;
   private pointer: PointerSense = {
     position: { x: 0, y: 0 },
@@ -127,8 +129,19 @@ export class BugWorld {
     private readonly canvas: HTMLCanvasElement
   ) {
     this.snapshot = habitat.snapshot(performance.now());
-    this.agents = Array.from({ length: CREATURE_COUNT }, (_, index) => ({
-      body: new CaterpillarBody(this.spawnPosition(this.snapshot, index), {
+    this.agents = Array.from({ length: this.population }, (_, index) =>
+      this.createAgent(index, this.snapshot)
+    );
+    this.bodies = this.agents.map((agent) => agent.body);
+    this.brains = this.agents.map((agent) => agent.brain);
+    this.body = this.bodies[0];
+    this.brain = this.brains[0];
+    this.renderer = new BugRenderer(canvas);
+  }
+
+  private createAgent(index: number, snapshot: HabitatSnapshot): CreatureAgent {
+    return {
+      body: new CaterpillarBody(this.spawnPosition(snapshot, index), {
         ...BUG_BODY_PRESETS[BUG_BODY_PRESET],
         randomSeed: 0xb067a11 ^ Math.imul(index + 1, 0x9e3779b1),
       }),
@@ -144,12 +157,35 @@ export class BugWorld {
       angerBubbleUntil: 0,
       musicBubbleAt: 0,
       musicBubbleUntil: 0,
-    }));
+    };
+  }
+
+  /** Change how many bugs wander the desktop (1..25). */
+  setPopulation(count: number) {
+    const next = Math.max(
+      1,
+      Math.min(MAX_CREATURE_COUNT, Math.round(count))
+    );
+    if (next === this.agents.length) {
+      this.population = next;
+      return;
+    }
+    this.population = next;
+    this.snapshot = this.habitat.snapshot(performance.now());
+    const existing = this.agents;
+    this.agents = Array.from({ length: next }, (_, index) =>
+      existing[index] ?? this.createAgent(index, this.snapshot)
+    );
     this.bodies = this.agents.map((agent) => agent.body);
     this.brains = this.agents.map((agent) => agent.brain);
     this.body = this.bodies[0];
     this.brain = this.brains[0];
-    this.renderer = new BugRenderer(canvas);
+    this.syncChewingDecorations();
+  }
+
+  /** Global metabolism multiplier. Infinity makes every meal immediate. */
+  setHungerScale(scale: number) {
+    for (const agent of this.agents) agent.brain.setHungerScale(scale);
   }
 
   start() {
@@ -834,7 +870,7 @@ export class BugWorld {
     if (index === 0) return { x: 0, y: 0 };
     const ringIndex = index - 1;
     const angle =
-      (ringIndex / Math.max(1, CREATURE_COUNT - 1)) * Math.PI * 2;
+      (ringIndex / Math.max(1, this.population - 1)) * Math.PI * 2;
     const radius = ringIndex % 2 === 0 ? 185 : 235;
     return {
       x: Math.cos(angle) * radius,
