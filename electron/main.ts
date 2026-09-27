@@ -30,7 +30,7 @@ interface Settings {
   bugCount: number;
   /** Metabolism multiplier 0..100. 0 = never hungry, 100 = instant meals. */
   hungerSpeed: number;
-  /** Video mode: a narrow, full-height strip on the left third of the screen. */
+  /** Video mode: a narrow, full-height strip on the left quarter of the screen. */
   reelMode: boolean;
   /** Silence the chewing / poop sounds. */
   muted: boolean;
@@ -142,7 +142,7 @@ function displayUnion(): Electron.Rectangle {
 }
 
 /**
- * Reel mode is a narrow vertical strip on the left third of the primary
+ * Reel mode is a narrow vertical strip on the left quarter of the primary
  * display, at full height, for capturing phone-shaped video.
  */
 function overlayBounds(): Electron.Rectangle {
@@ -152,7 +152,7 @@ function overlayBounds(): Electron.Rectangle {
     return {
       x: display.bounds.x,
       y: display.bounds.y,
-      width: Math.max(240, Math.round(display.bounds.width / 3)),
+      width: Math.max(200, Math.round(display.bounds.width / 4)),
       height: display.bounds.height,
     };
   }
