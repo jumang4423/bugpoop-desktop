@@ -1,0 +1,26 @@
+{
+  "name": "bugpoop-desktop",
+  "productName": "Bugpoop",
+  "version": "0.1.0",
+  "description": "A tiny desktop pet: a caterpillar that wanders your screen, nibbles random spots, poops, and gets angry when the cursor touches it.",
+  "license": "MIT",
+  "author": "jumang4423",
+  "private": true,
+  "type": "module",
+  "main": "dist/main.cjs",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "start": "npm run build && electron .",
+    "dev": "npm run build && BUGBUG_DEV=1 electron .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.3",
+    "electron": "^44.4.5",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.2"
+  }
+}
