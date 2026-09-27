@@ -11,6 +11,7 @@ interface PetSettings {
   bugCount: number;
   hungerSpeed: number;
   reelMode: boolean;
+  muted: boolean;
 }
 
 interface PetBridgeApi {

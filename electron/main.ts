@@ -24,7 +24,6 @@ let overlay: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let cursorTimer: NodeJS.Timeout | null = null;
 let settingsWindow: BrowserWindow | null = null;
-let muted = false;
 
 interface Settings {
   /** How many bugs wander the desktop (1..50). */
@@ -33,12 +32,15 @@ interface Settings {
   hungerSpeed: number;
   /** Video mode: a narrow, full-height strip on the left third of the screen. */
   reelMode: boolean;
+  /** Silence the chewing / poop sounds. */
+  muted: boolean;
 }
 
 const DEFAULT_SETTINGS: Settings = {
   bugCount: 1,
   hungerSpeed: 35,
   reelMode: false,
+  muted: false,
 };
 
 function settingsFile(): string {
@@ -59,6 +61,8 @@ function clampSettings(input: Partial<Settings>): Settings {
       typeof input.reelMode === "boolean"
         ? input.reelMode
         : DEFAULT_SETTINGS.reelMode,
+    muted:
+      typeof input.muted === "boolean" ? input.muted : DEFAULT_SETTINGS.muted,
   };
 }
 
@@ -88,6 +92,10 @@ function broadcastSettings(): void {
   overlay?.webContents.send("settings", settings);
 }
 
+function broadcastMute(): void {
+  overlay?.webContents.send("mute", settings.muted);
+}
+
 function openSettings(): void {
   if (settingsWindow && !settingsWindow.isDestroyed()) {
     settingsWindow.show();
@@ -96,7 +104,7 @@ function openSettings(): void {
   }
   settingsWindow = new BrowserWindow({
     width: 460,
-    height: 384,
+    height: 426,
     useContentSize: true,
     resizable: false,
     minimizable: false,
@@ -187,7 +195,10 @@ function createOverlay(): void {
   }
 
   overlay.loadFile(path.join(projectRoot, "index.html"));
-  overlay.webContents.on("did-finish-load", () => broadcastSettings());
+  overlay.webContents.on("did-finish-load", () => {
+    broadcastSettings();
+    broadcastMute();
+  });
   overlay.once("ready-to-show", () => {
     if (!overlay || overlay.isDestroyed()) return;
     if (DEV) overlay.show();
@@ -230,10 +241,11 @@ function createTray(): void {
     tray.setContextMenu(
       Menu.buildFromTemplate([
         {
-          label: muted ? "Unmute" : "Mute",
+          label: settings.muted ? "Unmute" : "Mute",
           click: () => {
-            muted = !muted;
-            overlay?.webContents.send("mute", muted);
+            settings = { ...settings, muted: !settings.muted };
+            saveSettings();
+            broadcastMute();
             rebuild();
           },
         },
@@ -254,10 +266,11 @@ app.whenReady().then(() => {
 
   ipcMain.handle("settings:get", () => settings);
   ipcMain.on("settings:set", (_event, partial: Partial<Settings>) => {
-    const previousReelMode = settings.reelMode;
+    const previous = settings;
     settings = clampSettings({ ...settings, ...partial });
     saveSettings();
-    if (settings.reelMode !== previousReelMode) applyDisplayBounds();
+    if (settings.reelMode !== previous.reelMode) applyDisplayBounds();
+    if (settings.muted !== previous.muted) broadcastMute();
     broadcastSettings();
   });
 

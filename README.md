@@ -47,6 +47,8 @@ open **Settings…**, **Mute** the chewing sounds, or **Quit**.
 - **Reel mode** — resizes the overlay into a narrow, full-height strip on the
   **left third of the screen**, for capturing phone-shaped video. It changes
   nothing else.
+- **Mute** — silences the chewing and poop sounds. The menu bar `Mute` item
+  stays in sync.
 
 Settings are saved to the app's user-data folder and applied live.
 

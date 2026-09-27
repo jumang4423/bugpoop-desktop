@@ -33,7 +33,7 @@ export class SoundKit {
   munch(): void {
     this.play(
       MUNCH_SOURCES[Math.floor(Math.random() * MUNCH_SOURCES.length)],
-      1
+      0.75
     );
   }
 
