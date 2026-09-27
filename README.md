@@ -71,7 +71,8 @@ electron/main.ts       transparent, click-through, all-Spaces window + tray
 electron/preload.ts    cursor / mute / reset bridge
 src/main.ts            canvas bootstrap and pointer plumbing
 src/adapters/...       the desktop habitat
-src/audio.ts           synthesized munch / wiggle / release sounds
+src/audio.ts           plays the sc-dotfiles mc_eat / funny sample banks
+src/sounds/            the original wav samples, bundled at build time
 ```
 
 Because a click-through window cannot receive mouse events on macOS, the main
@@ -84,6 +85,8 @@ click.
 - The entire creature implementation (`src/bug/`) is by **jumang4423** and was
   written for [text.management](https://github.com/mindofmatthew/text.management).
 - The face and poop artwork (`assets/`) is original work by jumang4423.
+- The munch and poop sounds (`src/sounds/`) are jumang4423's SuperDirt samples
+  from `sc-dotfiles` (`mc_eat`, `funny`).
 
 ## License
 

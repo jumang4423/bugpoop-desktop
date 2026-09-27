@@ -27,6 +27,7 @@ habitat.resize(window.innerWidth, window.innerHeight);
 
 const world = new BugWorld(habitat, canvas);
 const sound = new SoundKit();
+sound.prime();
 
 world.onMunch = () => sound.munch();
 world.onPoopSound = (kind) =>

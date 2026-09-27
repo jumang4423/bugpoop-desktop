@@ -19,6 +19,7 @@ await build({
   outfile: "dist/renderer.js",
   format: "iife",
   platform: "browser",
+  loader: { ".wav": "dataurl" },
 });
 
 // Electron main + preload: CommonJS, with electron kept external.

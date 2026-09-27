@@ -1,13 +1,28 @@
-const MASTER_GAIN = 0.3;
+import eat1 from "./sounds/eat1.wav";
+import eat2 from "./sounds/eat2.wav";
+import eat3 from "./sounds/eat3.wav";
+import poopWiggle from "./sounds/funny25.wav";
+import poopRelease from "./sounds/funny26.wav";
 
-/** Tiny synthesized sound kit. No audio files, no network, no OSC. */
+// The real bug sounds, taken from sc-dotfiles: the SuperDirt `mc_eat` bank for
+// munching and `funny` 25/26 for the poop wiggle and release. They are played
+// straight through WebAudio here instead of being sent to SuperDirt over OSC.
+const MUNCH_SOURCES = [eat1, eat2, eat3];
+const MASTER_GAIN = 0.8;
+
 export class SoundKit {
   private context: AudioContext | null = null;
   private master: GainNode | null = null;
   private muted = false;
+  private readonly sources = [...MUNCH_SOURCES, poopWiggle, poopRelease];
+  private readonly buffers: Array<AudioBuffer | null> = this.sources.map(
+    () => null
+  );
+  private loading = false;
 
   prime(): void {
-    this.ensure();
+    const context = this.ensure();
+    if (context) this.loadAll(context);
   }
 
   setMuted(muted: boolean): void {
@@ -16,19 +31,38 @@ export class SoundKit {
   }
 
   munch(): void {
-    if (this.muted) return;
-    this.noise(0.07, 420 + Math.random() * 900, 0.55);
+    this.play(
+      MUNCH_SOURCES[Math.floor(Math.random() * MUNCH_SOURCES.length)],
+      1
+    );
   }
 
   wiggle(): void {
-    if (this.muted) return;
-    this.noise(0.32, 170, 0.3);
+    this.play(poopWiggle, 0.85);
   }
 
   release(): void {
+    this.play(poopRelease, 0.99);
+  }
+
+  private play(source: string, gain: number): void {
     if (this.muted) return;
-    this.tone(240, 0.16, 0.45, "square", 90);
-    this.noise(0.12, 500, 0.35);
+    const context = this.ensure();
+    if (!context || !this.master) return;
+    const index = this.sources.indexOf(source);
+    const buffer = index >= 0 ? this.buffers[index] : null;
+    if (!buffer) {
+      this.loadAll(context);
+      return;
+    }
+    const node = context.createBufferSource();
+    node.buffer = buffer;
+    node.playbackRate.value = 1 + (Math.random() - 0.5) * 0.08;
+    const envelope = context.createGain();
+    envelope.gain.value = gain;
+    node.connect(envelope);
+    envelope.connect(this.master);
+    node.start();
   }
 
   private ensure(): AudioContext | null {
@@ -43,57 +77,17 @@ export class SoundKit {
     return this.context;
   }
 
-  private noise(duration: number, frequency: number, gain: number): void {
-    const context = this.ensure();
-    if (!context || !this.master) return;
-    const frames = Math.max(1, Math.floor(context.sampleRate * duration));
-    const buffer = context.createBuffer(1, frames, context.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let index = 0; index < frames; index += 1) {
-      data[index] = (Math.random() * 2 - 1) * (1 - index / frames);
-    }
-    const source = context.createBufferSource();
-    source.buffer = buffer;
-    const filter = context.createBiquadFilter();
-    filter.type = "bandpass";
-    filter.frequency.value = frequency;
-    filter.Q.value = 0.9;
-    const envelope = context.createGain();
-    const now = context.currentTime;
-    envelope.gain.setValueAtTime(0.0001, now);
-    envelope.gain.exponentialRampToValueAtTime(gain, now + 0.006);
-    envelope.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-    source.connect(filter);
-    filter.connect(envelope);
-    envelope.connect(this.master);
-    source.start(now);
-    source.stop(now + duration + 0.03);
-  }
-
-  private tone(
-    startFrequency: number,
-    duration: number,
-    gain: number,
-    type: OscillatorType,
-    endFrequency: number
-  ): void {
-    const context = this.ensure();
-    if (!context || !this.master) return;
-    const now = context.currentTime;
-    const oscillator = context.createOscillator();
-    oscillator.type = type;
-    oscillator.frequency.setValueAtTime(startFrequency, now);
-    oscillator.frequency.exponentialRampToValueAtTime(
-      Math.max(20, endFrequency),
-      now + duration
-    );
-    const envelope = context.createGain();
-    envelope.gain.setValueAtTime(0.0001, now);
-    envelope.gain.exponentialRampToValueAtTime(gain, now + 0.01);
-    envelope.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-    oscillator.connect(envelope);
-    envelope.connect(this.master);
-    oscillator.start(now);
-    oscillator.stop(now + duration + 0.02);
+  private loadAll(context: AudioContext): void {
+    if (this.loading) return;
+    this.loading = true;
+    this.sources.forEach((source, index) => {
+      fetch(source)
+        .then((response) => response.arrayBuffer())
+        .then((data) => context.decodeAudioData(data))
+        .then((buffer) => {
+          this.buffers[index] = buffer;
+        })
+        .catch(() => {});
+    });
   }
 }
