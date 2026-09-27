@@ -53,6 +53,29 @@ window.addEventListener("keydown", () => sound.prime());
 
 world.start();
 
+// A body pulse on every beat, like text.management's per-cycle rhythm
+// reaction. 130 BPM is a metronome on the frame clock; the renderer turns each
+// pulse into a damped-spring squash that travels head -> tail.
+const BEAT_BPM = 130;
+const BEAT_INTERVAL = 60000 / BEAT_BPM;
+let nextBeatAt = performance.now();
+let beatDirection: 1 | -1 = 1;
+function metronome(): void {
+  const now = performance.now();
+  if (now >= nextBeatAt) {
+    world.rhythmPulse({
+      startedAt: nextBeatAt,
+      intensity: 0.9,
+      direction: beatDirection,
+    });
+    beatDirection = beatDirection === 1 ? -1 : 1;
+    nextBeatAt += BEAT_INTERVAL;
+    if (nextBeatAt < now) nextBeatAt = now + BEAT_INTERVAL;
+  }
+  requestAnimationFrame(metronome);
+}
+requestAnimationFrame(metronome);
+
 function requiredCanvas(): HTMLCanvasElement {
   const element = document.querySelector<HTMLCanvasElement>("#stage");
   if (!element) throw new Error("#stage canvas is missing");

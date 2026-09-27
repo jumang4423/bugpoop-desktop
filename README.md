@@ -12,6 +12,9 @@ bar tray icon.
 Nothing on your desktop is ever touched. The bug nibbles empty space; no files,
 icons, clipboard, or other apps are modified.
 
+The bug also pulses its whole body on a **130 BPM** beat, the same rhythm
+reaction text.management runs on every musical cycle.
+
 ## What it does
 
 - **Wanders** — rests, picks a random spot, crawls there with the original soft
