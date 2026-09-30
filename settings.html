@@ -50,6 +50,12 @@
         width: 100%;
         margin: 0;
       }
+      select {
+        width: 100%;
+        font: inherit;
+        font-size: 13px;
+        padding: 4px 6px;
+      }
       .checkbox {
         display: flex;
         align-items: center;
@@ -88,6 +94,15 @@
         <output class="value" id="hunger-out">35</output>
       </div>
       <input id="hunger" type="range" min="0" max="100" step="1" value="35" />
+    </div>
+
+    <div class="row">
+      <div class="label">
+        <span>出力オーディオ (output device)</span>
+      </div>
+      <select id="output">
+        <option value="">System default</option>
+      </select>
     </div>
 
     <div class="row">

@@ -97,6 +97,25 @@ const LEG_MOTION_TIME_SCALE = 0.5;
 const BODY_DRIVE_SCALE = 2;
 const CRUISE_SPEED_SCALE = 0.42;
 export const MAX_TURN_RATE = 2;
+
+// Inertial settle on arrival. Today the pose is held the instant locomotion is
+// cut, which reads as a dead stop. Real mass keeps moving: the rear catches up
+// and compresses the body, then the flesh springs back once before relaxing.
+// This is intentionally render-only. The physics pose still holds exactly, so
+// pinned hands, the mass solver and the reach brake are never disturbed; only
+// the visible silhouette carries the residual momentum.
+const STOP_SETTLE_MIN_SPEED = 5;
+const STOP_SETTLE_AMPLITUDE_PER_SPEED = 0.26;
+const STOP_SETTLE_MAX_PX = 46;
+// Integrated at the same substep rate as update() (five per display step).
+// ~6.5 Hz with light damping: soft enough that the body keeps wobbling for a
+// few beats after the stop instead of snapping back rigidly, while still fast
+// enough not to read as a slow lean.
+const SETTLE_STIFFNESS = 65;
+const SETTLE_DAMPING = 2.5;
+// Launch gain turns the arrival speed into the spring's initial velocity; the
+// first compression peak then lands near the requested amplitude.
+const SETTLE_LAUNCH = 10;
 const LEG_JOINT_LIMITS: readonly [
   readonly [number, number],
   readonly [number, number],
@@ -193,6 +212,11 @@ export class CaterpillarBody {
   private renderPreviousChewExcitement = 0;
   private renderPreviousPoopPhase = 0;
   private renderPreviousPoopExcitement = 0;
+  private settleOffset = 0;
+  private settleVelocity = 0;
+  private renderPreviousSettleOffset = 0;
+  private previousCommandedSpeed = 0;
+  private locomotionStopped = true;
 
   constructor(
     origin: Vec2,
@@ -356,6 +380,7 @@ export class CaterpillarBody {
     this.renderPreviousChewExcitement = this.chewExcitement;
     this.renderPreviousPoopPhase = this.poopPhase;
     this.renderPreviousPoopExcitement = this.poopExcitement;
+    this.renderPreviousSettleOffset = this.settleOffset;
   }
 
   renderNodeAt(index: number, interpolation: number): Vec2 {
@@ -363,10 +388,13 @@ export class CaterpillarBody {
     const previous = this.renderPreviousNodes[index] ?? current;
     return add(
       add(
-        lerpVec(previous, current, clamp(interpolation)),
-        this.renderChewOffsetAt(index, interpolation)
+        add(
+          lerpVec(previous, current, clamp(interpolation)),
+          this.renderChewOffsetAt(index, interpolation)
+        ),
+        this.renderPoopOffsetAt(index, interpolation)
       ),
-      this.renderPoopOffsetAt(index, interpolation)
+      this.renderSettleOffsetAt(index, interpolation)
     );
   }
 
@@ -385,8 +413,11 @@ export class CaterpillarBody {
     ) as [Vec2, Vec2, Vec2, Vec2];
     const leg = this.legs[legIndex];
     const rootOffset = add(
-      this.renderChewOffsetAt(leg?.nodeIndex ?? 0, interpolation),
-      this.renderPoopOffsetAt(leg?.nodeIndex ?? 0, interpolation)
+      add(
+        this.renderChewOffsetAt(leg?.nodeIndex ?? 0, interpolation),
+        this.renderPoopOffsetAt(leg?.nodeIndex ?? 0, interpolation)
+      ),
+      this.renderSettleOffsetAt(leg?.nodeIndex ?? 0, interpolation)
     );
     const offsetWeights = [1, 0.72, 0.3, 0] as const;
     return rendered.map((point, pointIndex) =>
@@ -395,10 +426,12 @@ export class CaterpillarBody {
   }
 
   renderRadiusAt(index: number, interpolation: number) {
-    return lerp(
-      this.renderPreviousRadii[index] ?? this.radiusAt(index),
-      this.radiusAt(index),
-      clamp(interpolation)
+    return (
+      lerp(
+        this.renderPreviousRadii[index] ?? this.radiusAt(index),
+        this.radiusAt(index),
+        clamp(interpolation)
+      ) * this.renderSettleBulge(interpolation)
     );
   }
 
@@ -413,6 +446,37 @@ export class CaterpillarBody {
     );
   }
 
+  // Visible residual momentum after a stop. Positive offset travels forward:
+  // the rear discs keep going while the front is already held, so the body
+  // compresses, springs back into a stretch and relaxes. Weight grows toward
+  // the tail, and legs are shifted with the same tapered weights as the other
+  // render offsets, so the hands stay pinned to the ground.
+  private renderSettleOffsetAt(index: number, interpolation: number): Vec2 {
+    const amount = clamp(interpolation);
+    const offset = lerp(
+      this.renderPreviousSettleOffset,
+      this.settleOffset,
+      amount
+    );
+    if (Math.abs(offset) < 0.02) return { x: 0, y: 0 };
+    const progress = index / Math.max(1, this.nodes.length - 1);
+    // A quick jolt through the whole body that grows toward the tail. Keeping
+    // the head weight modest avoids the read as a slow body-lean.
+    const weight = 0.5 + 0.5 * progress;
+    return scale(this.renderTravelDirection(interpolation), offset * weight);
+  }
+
+  // Axial compression reads as a slight volume bulge, matching the tissue
+  // response the physics spring already produces on impact.
+  private renderSettleBulge(interpolation: number): number {
+    const offset = lerp(
+      this.renderPreviousSettleOffset,
+      this.settleOffset,
+      clamp(interpolation)
+    );
+    return 1 + clamp(offset / STOP_SETTLE_MAX_PX, -1, 1) * 0.24;
+  }
+
   update(deltaSeconds: number, control: BodyControl, bounds: Rect) {
     this.lastControl = control;
     const requestedDirection = this.wallAwareDirection(
@@ -423,6 +487,15 @@ export class CaterpillarBody {
     const requestedAngle = Math.atan2(requestedDirection.y, requestedDirection.x);
     const headingError = wrapAngle(requestedAngle - this.headingAngle);
     const locomotionPaused = control.speed <= 0.8 || control.sleep >= 0.86;
+    if (locomotionPaused && !this.locomotionStopped) {
+      // The command just dropped to zero. Convert the speed we were carrying
+      // into a settle impulse so the body keeps travelling for a beat instead
+      // of freezing on the spot.
+      this.beginSettle(this.previousCommandedSpeed);
+    }
+    this.locomotionStopped = locomotionPaused;
+    this.previousCommandedSpeed = control.speed;
+    this.updateSettle(deltaSeconds);
     if (locomotionPaused) {
       // Arrival is a literal pose hold: do not rotate the torso underneath
       // world-pinned hands and make every limb appear to fold toward the head.
@@ -523,6 +596,38 @@ export class CaterpillarBody {
     }
   }
 
+  private beginSettle(speed: number) {
+    if (speed < STOP_SETTLE_MIN_SPEED) return;
+    const amplitude = Math.min(
+      STOP_SETTLE_MAX_PX,
+      speed * STOP_SETTLE_AMPLITUDE_PER_SPEED
+    );
+    // Positive offset travels with the body, so the rear keeps moving forward
+    // (compression) and the spring then overshoots into a stretch before it
+    // relaxes. Stack onto any in-flight settle instead of restarting it.
+    this.settleVelocity += amplitude * SETTLE_LAUNCH;
+  }
+
+  private updateSettle(deltaSeconds: number) {
+    if (
+      Math.abs(this.settleOffset) < 0.01 &&
+      Math.abs(this.settleVelocity) < 0.01
+    ) {
+      this.settleOffset = 0;
+      this.settleVelocity = 0;
+      return;
+    }
+    const acceleration =
+      -SETTLE_STIFFNESS * this.settleOffset -
+      SETTLE_DAMPING * this.settleVelocity;
+    this.settleVelocity += acceleration * deltaSeconds;
+    this.settleOffset = clamp(
+      this.settleOffset + this.settleVelocity * deltaSeconds,
+      -STOP_SETTLE_MAX_PX * 1.5,
+      STOP_SETTLE_MAX_PX * 1.5
+    );
+  }
+
   reset(origin: Vec2) {
     this.growth = 0;
     this.headingAngle = 0;
@@ -537,6 +642,11 @@ export class CaterpillarBody {
     this.chewExcitement = 0;
     this.poopPhase = 0;
     this.poopExcitement = 0;
+    this.settleOffset = 0;
+    this.settleVelocity = 0;
+    this.renderPreviousSettleOffset = 0;
+    this.previousCommandedSpeed = 0;
+    this.locomotionStopped = true;
     this.renderPreviousChewPhase = 0;
     this.renderPreviousChewExcitement = 0;
     this.renderPreviousPoopPhase = 0;

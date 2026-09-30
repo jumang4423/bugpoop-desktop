@@ -10,10 +10,48 @@ import poopRelease from "./sounds/funny26.wav";
 const MUNCH_SOURCES = [eat1, eat2, eat3];
 const MASTER_GAIN = 0.8;
 
+// Chromium ships AudioOutputDevice routing, but the bundled DOM lib predates it.
+declare global {
+  interface AudioContext {
+    setSinkId(sinkId: string): Promise<void>;
+  }
+}
+
+/**
+ * The output devices the overlay may route its audio to. Device ids are salted
+ * per origin, so this must be called in the window that owns the AudioContext.
+ */
+export async function listAudioOutputs(): Promise<PetAudioOutput[]> {
+  if (typeof navigator === "undefined" || !navigator.mediaDevices) return [];
+  let devices: MediaDeviceInfo[];
+  try {
+    devices = await navigator.mediaDevices.enumerateDevices();
+  } catch {
+    return [];
+  }
+  const seen = new Set<string>();
+  const outputs: PetAudioOutput[] = [];
+  for (const device of devices) {
+    if (device.kind !== "audiooutput") continue;
+    // "default" / "communications" are aliases of the system default, which a
+    // "" sink id already covers.
+    if (!device.deviceId || device.deviceId === "default") continue;
+    if (device.deviceId === "communications") continue;
+    if (seen.has(device.deviceId)) continue;
+    seen.add(device.deviceId);
+    outputs.push({
+      id: device.deviceId,
+      label: device.label || `Output ${outputs.length + 1}`,
+    });
+  }
+  return outputs;
+}
+
 export class SoundKit {
   private context: AudioContext | null = null;
   private master: GainNode | null = null;
   private muted = false;
+  private sinkId = "";
   private readonly sources = [...MUNCH_SOURCES, poopWiggle, poopRelease];
   private readonly buffers: Array<AudioBuffer | null> = this.sources.map(
     () => null
@@ -28,6 +66,33 @@ export class SoundKit {
   setMuted(muted: boolean): void {
     this.muted = muted;
     if (this.master) this.master.gain.value = muted ? 0 : MASTER_GAIN;
+  }
+
+  /**
+   * Route the whole graph to an output device. "" means the system default.
+   * Safe to call before the AudioContext exists; the sink is applied lazily.
+   */
+  setOutputDevice(deviceId: string): void {
+    this.sinkId = deviceId;
+    this.applySink();
+  }
+
+  /** Re-apply the current sink after the device list changes. */
+  refreshOutputDevice(): void {
+    this.applySink();
+  }
+
+  private applySink(): void {
+    const context = this.context;
+    if (!context) return;
+    const requested = this.sinkId;
+    context.setSinkId(requested).catch(() => {
+      // The device vanished (unplugged, renamed). Fall back to the default,
+      // unless a newer choice has already replaced this one.
+      if (this.sinkId !== requested) return;
+      this.sinkId = "";
+      void context.setSinkId("").catch(() => {});
+    });
   }
 
   munch(): void {
@@ -72,6 +137,7 @@ export class SoundKit {
       this.master = this.context.createGain();
       this.master.gain.value = this.muted ? 0 : MASTER_GAIN;
       this.master.connect(this.context.destination);
+      this.applySink();
     }
     if (this.context.state === "suspended") void this.context.resume();
     return this.context;

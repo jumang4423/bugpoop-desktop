@@ -1,4 +1,4 @@
-import { SoundKit } from "./audio";
+import { listAudioOutputs, SoundKit } from "./audio";
 import { DesktopHabitat } from "./adapters/desktopHabitat";
 import { BugWorld } from "./bug/world";
 import { hungerScaleFor } from "./hunger";
@@ -19,6 +19,22 @@ world.onPoopSound = (kind) =>
 function applySettings(settings: PetSettings): void {
   world.setPopulation(settings.bugCount);
   world.setHungerScale(hungerScaleFor(settings.hungerSpeed));
+  sound.setOutputDevice(settings.outputDeviceId ?? "");
+}
+
+// The settings window asks for the output device list; the overlay answers
+// because device ids are only valid in the origin that enumerated them.
+window.petBridge?.onAudioList(() => {
+  void listAudioOutputs().then((devices) => {
+    window.petBridge?.sendAudioOutputs(devices);
+  });
+});
+
+// Plug/unplug: re-point the graph and let the settings dropdown refresh.
+if (navigator.mediaDevices) {
+  navigator.mediaDevices.addEventListener("devicechange", () => {
+    sound.refreshOutputDevice();
+  });
 }
 
 window.petBridge?.onSettings((settings) => applySettings(settings));
@@ -54,9 +70,9 @@ window.addEventListener("keydown", () => sound.prime());
 world.start();
 
 // A body pulse on every beat, like text.management's per-cycle rhythm
-// reaction. 130 BPM is a metronome on the frame clock; the renderer turns each
-// pulse into a damped-spring squash that travels head -> tail.
-const BEAT_BPM = 130;
+// reaction. 60 BPM is the calm resting human heart rate; the renderer turns
+// each pulse into a damped-spring squash that travels head -> tail.
+const BEAT_BPM = 60;
 const BEAT_INTERVAL = 60000 / BEAT_BPM;
 let nextBeatAt = performance.now();
 let beatDirection: 1 | -1 = 1;

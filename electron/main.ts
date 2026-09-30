@@ -34,6 +34,8 @@ interface Settings {
   reelMode: boolean;
   /** Silence the chewing / poop sounds. */
   muted: boolean;
+  /** WebAudio sink id for the bug sounds; "" follows the system default. */
+  outputDeviceId: string;
 }
 
 const DEFAULT_SETTINGS: Settings = {
@@ -41,6 +43,7 @@ const DEFAULT_SETTINGS: Settings = {
   hungerSpeed: 35,
   reelMode: false,
   muted: false,
+  outputDeviceId: "",
 };
 
 function settingsFile(): string {
@@ -63,6 +66,10 @@ function clampSettings(input: Partial<Settings>): Settings {
         : DEFAULT_SETTINGS.reelMode,
     muted:
       typeof input.muted === "boolean" ? input.muted : DEFAULT_SETTINGS.muted,
+    outputDeviceId:
+      typeof input.outputDeviceId === "string"
+        ? input.outputDeviceId
+        : DEFAULT_SETTINGS.outputDeviceId,
   };
 }
 
@@ -96,6 +103,44 @@ function broadcastMute(): void {
   overlay?.webContents.send("mute", settings.muted);
 }
 
+/**
+ * Output devices are enumerated by the overlay, because device ids are salted
+ * per origin. The settings window only ever displays the list and hands the
+ * chosen id back, so a single window owns both ends of the round trip.
+ */
+interface AudioOutput {
+  id: string;
+  label: string;
+}
+
+let pendingOutputs: ((devices: AudioOutput[]) => void) | null = null;
+let pendingOutputsTimer: NodeJS.Timeout | null = null;
+
+function requestAudioOutputs(): Promise<AudioOutput[]> {
+  if (!overlay || overlay.isDestroyed()) return Promise.resolve([]);
+  const window = overlay;
+  return new Promise((resolve) => {
+    // A newer request supersedes an older one.
+    if (pendingOutputs) pendingOutputs([]);
+    if (pendingOutputsTimer) clearTimeout(pendingOutputsTimer);
+    pendingOutputs = resolve;
+    pendingOutputsTimer = setTimeout(() => {
+      pendingOutputs = null;
+      pendingOutputsTimer = null;
+      resolve([]);
+    }, 4000);
+    window.webContents.send("audio:list");
+  });
+}
+
+function resolveAudioOutputs(devices: AudioOutput[]): void {
+  if (pendingOutputsTimer) clearTimeout(pendingOutputsTimer);
+  pendingOutputsTimer = null;
+  const resolve = pendingOutputs;
+  pendingOutputs = null;
+  if (resolve) resolve(devices);
+}
+
 function openSettings(): void {
   if (settingsWindow && !settingsWindow.isDestroyed()) {
     settingsWindow.show();
@@ -104,7 +149,7 @@ function openSettings(): void {
   }
   settingsWindow = new BrowserWindow({
     width: 460,
-    height: 426,
+    height: 490,
     useContentSize: true,
     resizable: false,
     minimizable: false,
@@ -265,6 +310,10 @@ app.whenReady().then(() => {
   settings = loadSettings();
 
   ipcMain.handle("settings:get", () => settings);
+  ipcMain.handle("audio:devices", () => requestAudioOutputs());
+  ipcMain.on("audio:outputs", (_event, devices: AudioOutput[]) => {
+    resolveAudioOutputs(Array.isArray(devices) ? devices : []);
+  });
   ipcMain.on("settings:set", (_event, partial: Partial<Settings>) => {
     const previous = settings;
     settings = clampSettings({ ...settings, ...partial });

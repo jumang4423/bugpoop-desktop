@@ -12,13 +12,22 @@ interface PetSettings {
   hungerSpeed: number;
   reelMode: boolean;
   muted: boolean;
+  outputDeviceId: string;
+}
+
+interface PetAudioOutput {
+  id: string;
+  label: string;
 }
 
 interface PetBridgeApi {
   onCursor(callback: (message: PetCursorMessage) => void): void;
   onMute(callback: (muted: boolean) => void): void;
   onSettings(callback: (settings: PetSettings) => void): void;
+  onAudioList(callback: () => void): void;
+  sendAudioOutputs(devices: PetAudioOutput[]): void;
   getSettings(): Promise<PetSettings>;
+  listAudioOutputs(): Promise<PetAudioOutput[]>;
   setSettings(partial: Partial<PetSettings>): void;
 }
 

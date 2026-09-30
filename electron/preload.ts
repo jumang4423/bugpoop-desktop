@@ -11,6 +11,12 @@ interface Settings {
   hungerSpeed: number;
   reelMode: boolean;
   muted: boolean;
+  outputDeviceId: string;
+}
+
+interface AudioOutput {
+  id: string;
+  label: string;
 }
 
 contextBridge.exposeInMainWorld("petBridge", {
@@ -30,9 +36,19 @@ contextBridge.exposeInMainWorld("petBridge", {
       callback(settings)
     );
   },
+  // The overlay answers device-list requests because it owns the audio graph.
+  onAudioList(callback: () => void): void {
+    ipcRenderer.on("audio:list", () => callback());
+  },
+  sendAudioOutputs(devices: AudioOutput[]): void {
+    ipcRenderer.send("audio:outputs", devices);
+  },
   // Settings window.
   getSettings(): Promise<Settings> {
     return ipcRenderer.invoke("settings:get") as Promise<Settings>;
+  },
+  listAudioOutputs(): Promise<AudioOutput[]> {
+    return ipcRenderer.invoke("audio:devices") as Promise<AudioOutput[]>;
   },
   setSettings(partial: Partial<Settings>): void {
     ipcRenderer.send("settings:set", partial);
