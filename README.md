@@ -41,6 +41,26 @@ npm run dev
 The app has no dock icon; it lives in the menu bar. Use the tray menu to
 open **Settings…**, **Mute** the chewing sounds, or **Quit**.
 
+### Install it as a desktop app
+
+```sh
+npm run app
+```
+
+This builds a real macOS `Bugpoop.app` — renderer, assets and a pixel-art icon
+generated from the bug's face — and installs it to `~/Applications`, where
+Spotlight-style launchers (e.g. [Simple Spotlight](https://github.com/jumang4423/simple-spotlight))
+pick it up by name. Run it again any time to rebuild and replace the installed
+copy. The first run downloads Electron once and caches it; later runs are quick.
+
+```sh
+BUGBUG_SYSTEM_APPS=1 npm run app   # install to /Applications instead
+```
+
+The bundle is tray-only (`LSUIElement`), so it still has no dock icon. It is
+built locally and ad-hoc signed, so it launches without a Gatekeeper prompt;
+if you copy it to another Mac, open it once via **right-click → Open**.
+
 ### Settings
 
 - **虫のかず / bugs** — how many creatures wander the desktop (1–50).

@@ -4,3 +4,6 @@ dist/
 .DS_Store
 .vite/
 coverage/
+release/
+assets/icon.icns
+assets/icon.iconset/
